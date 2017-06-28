@@ -53,13 +53,13 @@ public class Bot implements Runnable {
 		for (Guild guild : jda.getGuilds()) {
 			new Thread(new Bot(guild)).start();
 		}
-		
-		jda.addEventListener(new ListenerAdapter(){
-			
+
+		jda.addEventListener(new ListenerAdapter() {
+
 			public void onGuildMemberRoleAdd(GuildMemberRoleAddEvent event) {
 				System.out.println(event.getRoles().get(0).getName());
 				System.out.println(jda.getSelfUser().getName());
-				if(event.getRoles().get(0).getName().equals(jda.getSelfUser().getName())){
+				if (event.getRoles().get(0).getName().equals(jda.getSelfUser().getName())) {
 					new Thread(new Bot(event.getGuild())).start();
 				}
 			}
