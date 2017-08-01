@@ -4,7 +4,6 @@
 package tk.nerdherd.bot;
 
 import java.util.ArrayList;
-
 import javax.security.auth.login.LoginException;
 
 import net.dv8tion.jda.core.AccountType;
@@ -12,6 +11,7 @@ import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.JDABuilder;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.TextChannel;
+import net.dv8tion.jda.core.events.ReconnectedEvent;
 import net.dv8tion.jda.core.events.guild.GuildLeaveEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
@@ -24,7 +24,7 @@ import net.dv8tion.jda.core.hooks.ListenerAdapter;
 public class Bot implements Runnable {
 
 	private static final String BOT_CHANNEL_NAME = "bot";
-	private ArrayList<BotInterface> bots = new ArrayList<BotInterface>();
+	private ArrayList<BotInterface> bots;
 	private static JDA jda;
 	private static String botToken;
 	protected Guild guild;
@@ -34,6 +34,7 @@ public class Bot implements Runnable {
 	 * 
 	 */
 	public Bot(Guild aGuild) {
+		bots = new ArrayList<BotInterface>();
 		guild = aGuild;
 		botChannel = guild.getTextChannelsByName(BOT_CHANNEL_NAME, false).get(0);
 	}
@@ -42,6 +43,7 @@ public class Bot implements Runnable {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		System.out.println("Start!");
 		botToken = args[0];
 		try {
 			jda = new JDABuilder(AccountType.BOT).setToken(botToken).buildBlocking();
@@ -61,6 +63,11 @@ public class Bot implements Runnable {
 				if (event.getRoles().get(0).getName().equals(jda.getSelfUser().getName())) {
 					new Thread(new Bot(event.getGuild())).start();
 				}
+			}
+			
+			public void onReconnect(ReconnectedEvent event) {
+				jda.shutdown();
+				main(args);
 			}
 		});
 	}
@@ -92,5 +99,4 @@ public class Bot implements Runnable {
 			}
 		});
 	}
-
 }
