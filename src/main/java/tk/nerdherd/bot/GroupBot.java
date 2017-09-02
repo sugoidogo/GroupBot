@@ -4,7 +4,9 @@
 package tk.nerdherd.bot;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.TimeUnit;
 
 import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Guild;
@@ -145,22 +147,83 @@ public class GroupBot extends Bot implements BotInterface {
 	 */
 	@SuppressWarnings("serial")
 	private void create(String arg, Member member) {
-		Role role = guildController.createRole().setName(arg).complete();
-		TextChannel channel = (TextChannel) guildController.createTextChannel(arg)
-				.addPermissionOverride(guild.getPublicRole(), NOTHING, Permission.MESSAGE_READ.getRawValue())
-				.addPermissionOverride(role, Permission.MESSAGE_READ.getRawValue(), NOTHING).complete();
+
+		Role role = role(arg);
+
+		for (List<String> group : groups) {
+			if (group.get(ROLE_NAME).equals(arg)) {
+				join(role.getName(), member);
+				return;
+			}
+		}
+
+		List<TextChannel> channels = new ArrayList<TextChannel>();
+		textChannel(arg);
+
+		for (TextChannel tc : guild.getTextChannels()) {
+			if (tc.getName().startsWith(arg)) {
+				channels.add(tc);
+			}
+		}
+
+		String groupS = role.getName() + " " + role.getId();
+
+		try {
+			for (TextChannel tc : channels) {
+				tc.getPermissionOverride(guild.getPublicRole()).delete().complete();
+				tc.getPermissionOverride(role).delete().complete();
+			}
+		} catch (Exception e) {
+			//e.printStackTrace();
+		}
+		
+		try {
+		for (TextChannel channel : channels) {
+			channel.createPermissionOverride(guild.getPublicRole()).setDeny(Permission.MESSAGE_READ).queue();
+			channel.createPermissionOverride(role).setAllow(Permission.MESSAGE_READ).queue();
+			groupS += " " + channel.getId();
+		}
+
+		final String groupSF = groupS;
 
 		groups.add(new ArrayList<String>() {
 			{
-				add(groupChannel.sendMessage(role.getName() + " " + role.getId() + " " + channel.getId()).complete()
-						.getId());
+				add(groupChannel.sendMessage(groupSF).complete().getId());
 				add(role.getName());
 				add(role.getId());
-				add(channel.getId());
+				for (TextChannel channel : channels) {
+					add(channel.getId());
+				}
 			}
 		});
 
 		join(role.getName(), member);
+		
+		}catch(Exception e) {
+			botChannel.sendMessage("Failed! please try again").queue();
+		}
+	}
+
+	private TextChannel textChannel(String arg) {
+
+		for (TextChannel tc : guild.getTextChannels()) {
+			if (tc.getName().equals(arg)) {
+				return tc;
+			}
+		}
+
+		return (TextChannel) guildController.createTextChannel(arg).complete();
+	}
+
+	private Role role(String arg) {
+
+		for (Role r : guild.getRoles()) {
+			if (r.getName().equals(arg)) {
+				return r;
+			}
+		}
+
+		return guildController.createRole().setName(arg).complete();
 	}
 
 	/**
