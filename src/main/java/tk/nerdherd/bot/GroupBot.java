@@ -1,7 +1,5 @@
 package tk.nerdherd.bot;
 
-import java.util.Scanner;
-
 import javax.security.auth.login.LoginException;
 
 import net.dv8tion.jda.core.AccountType;
@@ -9,13 +7,13 @@ import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.JDABuilder;
 import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Category;
-import net.dv8tion.jda.core.entities.Emote;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Message;
 import net.dv8tion.jda.core.entities.MessageHistory;
 import net.dv8tion.jda.core.entities.PrivateChannel;
 import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.entities.TextChannel;
+import net.dv8tion.jda.core.entities.User;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionAddEvent;
@@ -75,6 +73,10 @@ public class GroupBot extends ListenerAdapter {
 
 	@Override
 	public void onGuildMessageReactionAdd(GuildMessageReactionAddEvent event) {
+		// Don't react outside of the groups channel
+		if (!event.getChannel().getName().equals(GROUP_CHANNEL_NAME))
+			return;
+
 		// Don't react to reactions from the bot itself
 		if (event.getUser().equals(jda.getSelfUser()))
 			return;
@@ -87,14 +89,12 @@ public class GroupBot extends ListenerAdapter {
 			joinGroup(event);
 		else if (reaction.equals(REACTION_ADD_TEXT_CHANNEL))
 			addTextChannel(event);
-		else if (event.getMember().isOwner() && event.getChannel().getName().equals(GROUP_CHANNEL_NAME)) {
+		else if (event.getMember().isOwner()) {
 			if (reaction.equals(REACTION_YES))
 				onJoinNewServer(event, true);
 			else if (reaction.equals(REACTION_NO))
 				onJoinNewServer(event, false);
 		}
-
-		System.out.println(reaction);
 	}
 
 	/**
@@ -116,8 +116,12 @@ public class GroupBot extends ListenerAdapter {
 	 * @param event
 	 */
 	private void addTextChannel(GuildMessageReactionAddEvent event) {
-		// TODO
-
+		event.getGuild()
+				.getCategoriesByName(
+						getFirstWord(event.getChannel().getMessageById(event.getMessageId()).complete().getContent()),
+						true)
+				.get(0).createTextChannel(DEFAULT_CHANNEL_NAME).queue();
+		event.getReaction().removeReaction(event.getUser()).queue();
 	}
 
 	/**
@@ -125,23 +129,27 @@ public class GroupBot extends ListenerAdapter {
 	 * 
 	 */
 	private void addVoiceChannel(GuildMessageReactionAddEvent event) {
-		// TODO
-		System.out.println("add voice channel to group");
+		event.getGuild()
+				.getCategoriesByName(
+						getFirstWord(event.getChannel().getMessageById(event.getMessageId()).complete().getContent()),
+						true)
+				.get(0).createVoiceChannel(DEFAULT_CHANNEL_NAME).queue();
+		event.getReaction().removeReaction(event.getUser()).queue();
 	}
 
 	/**
 	 * @param event
 	 */
 	private void joinGroup(GuildMessageReactionAddEvent event) {
-		// TODO
-
+		String group = getFirstWord(event.getChannel().getMessageById(event.getMessageId()).complete().getContent());
+		Guild guild = event.getGuild();
+		guild.getController().addRolesToMember(event.getMember(), guild.getRolesByName(group, true).get(0)).queue();
 	}
 
 	/**
 	 * @param message
 	 */
 	private void newGroup(Message message) {
-		// TODO create a group
 		if (message.getContent().equals(NEW_GUILD_NO_CHANNEL)) {
 			message.delete().queue();
 			return;
@@ -156,20 +164,37 @@ public class GroupBot extends ListenerAdapter {
 		}
 
 		String groupName = getFirstWord(message.getContent());
+		if (!isAlphanumeric(groupName.trim())) {
+			invalidName(message);
+			return;
+		}
 		Guild guild = message.getGuild();
 		GuildController guildController = guild.getController();
 		Role role = newRole(guild, guildController, groupName);
-		role.getManager().setName(groupName).complete();
+		role.getManager().setName(groupName).queue();
 		Category category = newCategory(guild, guildController, groupName);
 		category.createPermissionOverride(guild.getPublicRole()).setDeny(Permission.MESSAGE_READ).queue();
 		category.createPermissionOverride(role).setAllow(Permission.MESSAGE_READ).queue();
 		category.createPermissionOverride(message.getMember()).setAllow(Permission.ALL_PERMISSIONS).queue();
+		for (Role mentionedRole : message.getMentionedRoles()) {
+			category.createPermissionOverride(mentionedRole).setAllow(Permission.MESSAGE_READ).queue();
+		}
+		for (User mentionedUser : message.getMentionedUsers()) {
+			guildController.addRolesToMember(guild.getMember(mentionedUser), role).queue();
+		}
 		category.createTextChannel(DEFAULT_CHANNEL_NAME).queue();
 
 		message.addReaction(REACTION_JOIN_GROUP).queue();
-		;
 		message.addReaction(REACTION_ADD_VOICE_CHANNEL).queue();
 		message.addReaction(REACTION_ADD_TEXT_CHANNEL).queue();
+	}
+
+	/**
+	 * @param message
+	 * 
+	 */
+	private void invalidName(Message message) {
+		message.addReaction(REACTION_NO).queue();
 	}
 
 	/**
@@ -252,4 +277,12 @@ public class GroupBot extends ListenerAdapter {
 		question.addReaction(REACTION_NO).queue();
 	}
 
+	private boolean isAlphanumeric(String str) {
+		for (int i = 0; i < str.length(); i++) {
+			char c = str.charAt(i);
+			if (c < 0x30 || (c >= 0x3a && c <= 0x40) || (c > 0x5a && c <= 0x60) || c > 0x7a)
+				return false;
+		}
+		return true;
+	}
 }
