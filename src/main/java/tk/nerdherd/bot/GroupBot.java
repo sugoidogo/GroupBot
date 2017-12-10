@@ -278,6 +278,7 @@ public class GroupBot extends ListenerAdapter {
 		message.addReaction(REACTION_ADD_VOICE_CHANNEL).queue();
 		message.addReaction(REACTION_ADD_TEXT_CHANNEL).queue();
 		groups.put(message.getIdLong(), groupName);
+		writeData(groups);
 		// System.out.println(groups);
 	}
 
