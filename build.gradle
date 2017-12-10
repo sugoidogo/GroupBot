@@ -23,7 +23,7 @@ repositories {
 
 dependencies {
 	
-	compile 'net.dv8tion:JDA:3.3.1_298'
+	compile 'net.dv8tion:JDA:3.3.1_308'
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:21.0'
