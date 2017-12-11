@@ -20,10 +20,12 @@ import net.dv8tion.jda.core.entities.Channel;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Message;
 import net.dv8tion.jda.core.entities.MessageHistory;
+import net.dv8tion.jda.core.entities.PermissionOverride;
 import net.dv8tion.jda.core.entities.PrivateChannel;
 import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.entities.TextChannel;
 import net.dv8tion.jda.core.entities.User;
+import net.dv8tion.jda.core.entities.VoiceChannel;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageDeleteEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
@@ -46,6 +48,9 @@ public class GroupBot extends ListenerAdapter {
 	public static JDA jda;
 	private static HashMap<Long, String> groups = new HashMap<Long, String>();
 	private static TextChannel DATA_STORAGE_CHANNEL;
+	private static boolean writing = false;
+
+	private boolean deleting = false;
 
 	public static void main(String[] args) {
 
@@ -69,8 +74,8 @@ public class GroupBot extends ListenerAdapter {
 			// TODO
 			e.printStackTrace();
 		}
-		
-		System.out.println("JDAInfo.Version="+JDAInfo.VERSION);
+
+		System.out.println("JDAInfo.Version=" + JDAInfo.VERSION);
 
 		try {
 			DATA_STORAGE_CHANNEL = jda.getGuildById(args[1]).getTextChannelsByName(jda.getSelfUser().getName(), true)
@@ -80,9 +85,9 @@ public class GroupBot extends ListenerAdapter {
 					.createTextChannel(jda.getSelfUser().getName()).complete();
 		}
 		try {
-			readData();
-		} catch (Exception e) {
-			e.printStackTrace();
+			readData(args[1]);
+		} catch (IndexOutOfBoundsException e) {
+			System.out.println("Rebuilding data set");
 			createData(args[1]);
 			writeData(groups);
 		}
@@ -100,18 +105,25 @@ public class GroupBot extends ListenerAdapter {
 	}
 
 	public static void writeData(Serializable data) {
-		try {
-			DATA_STORAGE_CHANNEL.getMessageById(DATA_STORAGE_CHANNEL.getLatestMessageIdLong()).complete().delete()
-					.queue();
-		} catch (Exception e) {
+		while (writing) {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
-		DATA_STORAGE_CHANNEL.sendMessage(serialize(data)).queue();
+		writing = true;
+		for(Message message:DATA_STORAGE_CHANNEL.getIterableHistory().complete()) {
+			message.delete().queue();
+		}
+		DATA_STORAGE_CHANNEL.sendMessage(serialize(data)).complete();
+		writing = false;
 	}
 
-	@SuppressWarnings("unchecked")
-	public static void readData() {
-		Message message = DATA_STORAGE_CHANNEL.getIterableHistory().complete().get(0);
-		groups = (HashMap<Long, String>) deserialize(message.getContent());
+	public static void readData(String ignore) {
+		createData(ignore);
+		writeData(groups);
 	}
 
 	@Override
@@ -164,6 +176,15 @@ public class GroupBot extends ListenerAdapter {
 	}
 
 	private void deleteGroup(long messageIdLong, Guild guild) {
+		while (deleting) {
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		deleting = true;
 		Category category = guild.getCategoriesByName(groups.get(messageIdLong), true).get(0);
 		for (Channel channel : category.getChannels()) {
 			channel.delete().complete();
@@ -171,6 +192,7 @@ public class GroupBot extends ListenerAdapter {
 		category.delete().complete();
 		guild.getRolesByName(groups.get(messageIdLong), true).get(0).delete().queue();
 		groups.remove(messageIdLong);
+		deleting = false;
 		writeData(groups);
 	}
 
@@ -241,15 +263,21 @@ public class GroupBot extends ListenerAdapter {
 		}
 
 		String groupName = getFirstWord(message.getContent());
-		if (!isAlphanumeric(groupName.trim())||groupName.length()<2) {
-			invalidName(message);
+		if (groups.containsValue(groupName)) {
+			message.delete().queue();
 			return;
 		}
 		Guild guild = message.getGuild();
 		GuildController guildController = guild.getController();
+		Category category;
+		try {
+			category = newCategory(guild, guildController, groupName);
+		}catch (Exception e) {
+			invalidName(message);
+			return;
+		}
 		Role role = newRole(guild, guildController, groupName);
 		role.getManager().setName(groupName).queue();
-		Category category = newCategory(guild, guildController, groupName);
 		try {
 			category.createPermissionOverride(guild.getPublicRole()).setDeny(Permission.MESSAGE_READ).queue();
 		} catch (IllegalStateException e) {
@@ -323,12 +351,47 @@ public class GroupBot extends ListenerAdapter {
 	private static Category newCategory(Guild guild, GuildController guildController, String groupName) {
 
 		for (Category category : guild.getCategories()) {
-			if (category.getName().equals(groupName))
-				return category;
+			if (category.getName().equals(groupName)) {
+				return findChannels(category);
+			}
+
 		}
 
-		return (Category) guildController.createCategory(groupName).complete();
+		return findChannels((Category) guildController.createCategory(groupName).complete());
 
+	}
+
+	private static Category findChannels(Category category) {
+		Guild guild = category.getGuild();
+		for (TextChannel channel : guild.getTextChannels()) {
+			if (channel.getName().equals(category.getName())) {
+				for (PermissionOverride permissionOverride : channel.getRolePermissionOverrides()) {
+					try {
+						category.createPermissionOverride(permissionOverride.getRole())
+								.setPermissions(permissionOverride.getAllowed(), permissionOverride.getDenied())
+								.complete();
+					} catch (Exception e) {
+
+					}
+				}
+				channel.getManager().setParent(category).complete();
+			}
+		}
+		for (VoiceChannel channel : guild.getVoiceChannels()) {
+			if (channel.getName().equals(category.getName())) {
+				for (PermissionOverride permissionOverride : channel.getRolePermissionOverrides()) {
+					try {
+						category.createPermissionOverride(permissionOverride.getRole())
+								.setPermissions(permissionOverride.getAllowed(), permissionOverride.getDenied())
+								.complete();
+					} catch (Exception e) {
+
+					}
+				}
+				channel.getManager().setParent(category).complete();
+			}
+		}
+		return category;
 	}
 
 	/**
