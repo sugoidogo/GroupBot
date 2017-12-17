@@ -300,7 +300,11 @@ public class GroupBot extends ListenerAdapter {
 			guildController.addRolesToMember(guild.getMember(mentionedUser), role).queue();
 		}
 		if (category.getChannels().isEmpty()) {
-			category.createTextChannel(DEFAULT_CHANNEL_NAME).queue();
+			category.createTextChannel(groupName).queue();
+		}else for(Channel channel:category.getChannels()) {
+			if(channel.getName().equals(DEFAULT_CHANNEL_NAME)) {
+				channel.getManager().setName(groupName).queue();
+			}
 		}
 		message.addReaction(REACTION_JOIN_GROUP).queue();
 		message.addReaction(REACTION_ADD_VOICE_CHANNEL).queue();
