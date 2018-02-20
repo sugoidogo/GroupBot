@@ -1,13 +1,11 @@
 
 apply plugin: 'java-library'
 
-
-// In this section you declare where to find the dependencies of your project
 repositories {
-    maven { url 'https://jitpack.io' }
+	jcenter()
 }
 
 dependencies {
-	compile 'com.github.DV8FromTheWorld:JDA:-SNAPSHOT'
+	compile 'net.dv8tion:JDA:3.5.1_339'
 }
 

@@ -51,9 +51,13 @@ public class GroupBot extends ListenerAdapter {
 
 	private static void createData() {
 		for (Guild guild : jda.getGuilds()) {
-			TextChannel channel = guild.getTextChannelsByName(GROUP_CHANNEL_NAME, true).get(0);
-			for (Message message : channel.getIterableHistory().complete()) {
-				newGroup(message);
+			try {
+				TextChannel channel = guild.getTextChannelsByName(GROUP_CHANNEL_NAME, true).get(0);
+				for (Message message : channel.getIterableHistory().complete()) {
+					newGroup(message);
+
+				}
+			} catch (Exception e) {
 
 			}
 		}
