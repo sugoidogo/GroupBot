@@ -8,8 +8,6 @@ import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.JDABuilder;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Message;
-import net.dv8tion.jda.core.entities.MessageHistory;
-import net.dv8tion.jda.core.entities.PrivateChannel;
 import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.entities.TextChannel;
 import net.dv8tion.jda.core.entities.User;
@@ -23,10 +21,6 @@ import net.dv8tion.jda.core.managers.GuildController;
 public class GroupBot extends ListenerAdapter {
 	public static final String GROUP_CHANNEL_NAME = "groups";
 	private static final String REACTION_JOIN_GROUP = "👤";
-	private static final String NEW_GUILD_OWNER_MESSAGE = "This bot requires a channel called 'groups' to perform all of it's functions.";
-	private static final String NEW_GUILD_NO_CHANNEL = "Please create a new text channel anywhere in your server by that name and I can get started. Note that there needs to be only one channel by this name or bad things will happen!";
-	private static final String NEW_GUILD_YES_CHANNEL = "Is this channel made for this bot?";
-	private static final String REACTION_YES = "✅";
 	private static final String REACTION_NO = "❎";
 	public static JDA jda;
 	private static HashMap<Long, String> groups = new HashMap<Long, String>();
@@ -96,13 +90,8 @@ public class GroupBot extends ListenerAdapter {
 
 		// Determine what to do based on the reaction
 		String reaction = event.getReactionEmote().getName();
-		if (reaction.equals(REACTION_JOIN_GROUP))
+		if (reaction.equals(REACTION_JOIN_GROUP)) {
 			joinGroup(event);
-		else if (event.getMember().isOwner()) {
-			if (reaction.equals(REACTION_YES))
-				onJoinNewServer(event, true);
-			else if (reaction.equals(REACTION_NO))
-				onJoinNewServer(event, false);
 		} else {
 			event.getReaction().removeReaction().queue();
 		}
@@ -125,21 +114,6 @@ public class GroupBot extends ListenerAdapter {
 
 	/**
 	 * @param event
-	 * @param b
-	 */
-	private void onJoinNewServer(GuildMessageReactionAddEvent event, boolean b) {
-		if (b) {
-			for (Message message : new MessageHistory(event.getChannel()).retrievePast(100).complete()) {
-				newGroup(message);
-			}
-		} else {
-			event.getChannel().sendMessage(NEW_GUILD_NO_CHANNEL);
-		}
-
-	}
-
-	/**
-	 * @param event
 	 */
 	private void joinGroup(GuildMessageReactionAddEvent event) {
 		String group = getFirstWord(
@@ -152,19 +126,6 @@ public class GroupBot extends ListenerAdapter {
 	 * @param message
 	 */
 	private static void newGroup(Message message) {
-		if (message.getContentStripped().equals(NEW_GUILD_NO_CHANNEL)) {
-			message.delete().queue();
-			return;
-		}
-		if (message.getContentStripped().equals(NEW_GUILD_YES_CHANNEL)) {
-			message.delete().queue();
-			return;
-		}
-		if (message.getContentStripped().equals(NEW_GUILD_OWNER_MESSAGE)) {
-			message.delete().queue();
-			return;
-		}
-
 		String groupName = getFirstWord(message.getContentStripped());
 		if (groups.containsValue(groupName)) {
 			message.delete().queue();
@@ -224,38 +185,10 @@ public class GroupBot extends ListenerAdapter {
 	 * @param event
 	 */
 	private void onJoinNewServer(GuildMemberRoleAddEvent event) {
-		for (TextChannel textChannel : event.getGuild().getTextChannels()) {
-			if (textChannel.getName().equals(GROUP_CHANNEL_NAME)) {
-				askOwner(event, textChannel);
-				return;
-			} else {
-				askOwner(event);
-			}
+		if(event.getGuild().getTextChannelsByName(GROUP_CHANNEL_NAME, true).size()>0) {
+			return;
 		}
 
 		event.getGuild().getController().createTextChannel(GROUP_CHANNEL_NAME).queue();
-		event.getGuild().getOwner().getUser().openPrivateChannel().complete().sendMessage(NEW_GUILD_OWNER_MESSAGE);
-	}
-
-	/**
-	 * @param event
-	 * 
-	 */
-	private void askOwner(GuildMemberRoleAddEvent event) {
-		PrivateChannel ownerChannel = event.getGuild().getOwner().getUser().openPrivateChannel().complete();
-		ownerChannel.sendMessage(NEW_GUILD_OWNER_MESSAGE);
-		ownerChannel.sendMessage(NEW_GUILD_NO_CHANNEL);
-	}
-
-	/**
-	 * @param event
-	 * @param textChannel
-	 */
-	private void askOwner(GuildMemberRoleAddEvent event, TextChannel textChannel) {
-		textChannel.sendMessage(textChannel.getGuild().getOwner().getAsMention() + " " + NEW_GUILD_OWNER_MESSAGE)
-				.queue();
-		Message question = textChannel.sendMessage(NEW_GUILD_YES_CHANNEL).complete();
-		question.addReaction(REACTION_YES).queue();
-		question.addReaction(REACTION_NO).queue();
 	}
 }
