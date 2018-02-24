@@ -137,7 +137,7 @@ public class GroupBot extends ListenerAdapter {
 		try {
 			Role role = newRole(guild, guildController, groupName);
 			role.getManager().setName(groupName).queue();
-			role.getManager().setMentionable(true);
+			role.getManager().setMentionable(true).queue();
 			for (User mentionedUser : message.getMentionedUsers()) {
 				guildController.addRolesToMember(guild.getMember(mentionedUser), role).queue();
 			}
