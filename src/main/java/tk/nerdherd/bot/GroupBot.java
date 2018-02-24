@@ -26,7 +26,6 @@ public class GroupBot extends ListenerAdapter {
     private static HashMap<Long, String> groups = new HashMap<>();
     private static final String REACTION_JOIN_GROUP = "👤";
     private static final String REACTION_NO = "❎";
-    private boolean deleting = false;
 
     public static void main(final String[] args) {
 
@@ -89,7 +88,7 @@ public class GroupBot extends ListenerAdapter {
 	final GuildController guildController = guild.getController();
 	try {
 	    final Role role = newRole(guild, guildController, groupName);
-	    final RoleManagerUpdatable roleMU=role.getManagerUpdatable();
+	    final RoleManagerUpdatable roleMU = role.getManagerUpdatable();
 	    roleMU.getNameField().setValue(groupName);
 	    roleMU.getMentionableField().setValue(true);
 	    roleMU.update().queue();
