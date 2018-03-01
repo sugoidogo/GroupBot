@@ -1,6 +1,6 @@
 # studious-potato
 
-The goal of this project is to provied non-admin discord server members to create and join roles with the explicit purpose of pinging a group when a message is relevant to them.
+The goal of this project is to provie non-admin discord server members to create and join roles with the explicit purpose of pinging a group when a message is relevant to them.
 
 Any server member may create a role via the bot. The role is not granted any special permissions. Any server member may then join that role, to be notified whenever that role is pinged.
 
