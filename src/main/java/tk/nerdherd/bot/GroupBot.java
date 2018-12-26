@@ -16,6 +16,7 @@ import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageDeleteEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionAddEvent;
+import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionRemoveEvent;
 import net.dv8tion.jda.core.hooks.ListenerAdapter;
 import net.dv8tion.jda.core.managers.GuildController;
 import net.dv8tion.jda.core.managers.RoleManagerUpdatable;
@@ -26,11 +27,12 @@ public class GroupBot extends ListenerAdapter {
 	private static HashMap<Long, String> groups = new HashMap<>();
 	private static final String REACTION_JOIN_GROUP = "👤";
 	private static final String REACTION_NO = "❎";
+	private static final String GROUP_CHANNEL_TOPIC = "The first word of every message here is the name of a group. Click the emoji to join or leave a group";
 
 	public static void main(final String[] args) {
 
 		System.setProperty("org.slf4j.Loggerger.log.WebSocketClient", "trace");
-		if(args.length==0) {
+		if (args.length == 0) {
 			System.out.println("Missing Bot Token!");
 			System.exit(1);
 		}
@@ -44,6 +46,7 @@ public class GroupBot extends ListenerAdapter {
 		} catch (LoginException | InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+			System.exit(1);
 		}
 
 	}
@@ -57,7 +60,7 @@ public class GroupBot extends ListenerAdapter {
 
 				}
 			} catch (final Exception e) {
-
+				onJoinNewServer(guild);
 			}
 		}
 	}
@@ -101,6 +104,7 @@ public class GroupBot extends ListenerAdapter {
 			}
 			guildController.addRolesToMember(message.getMember(), role).queue();
 			message.addReaction(REACTION_JOIN_GROUP).queue();
+			groups.put(message.getIdLong(), groupName);
 		} catch (final Exception e) {
 			invalidName(message);
 			return;
@@ -126,13 +130,13 @@ public class GroupBot extends ListenerAdapter {
 	@Override
 	public void onGuildMemberRoleAdd(final GuildMemberRoleAddEvent event) {
 		if (event.getRoles().get(0).getName().equals(jda.getSelfUser().getName())) {
-			onJoinNewServer(event);
+			onJoinNewServer(event.getGuild());
 		}
 	}
 
 	@Override
 	public void onGuildMessageDelete(final GuildMessageDeleteEvent event) {
-		if (event.getChannel().getName().equals(GROUP_CHANNEL_NAME) && groups.containsKey(event.getMessageIdLong())) {
+		if (event.getChannel().getName().equals(GROUP_CHANNEL_NAME)) {
 			deleteGroup(event.getMessageIdLong(), event.getGuild());
 		}
 	}
@@ -159,6 +163,37 @@ public class GroupBot extends ListenerAdapter {
 	}
 
 	@Override
+	public void onGuildMessageReactionRemove(final GuildMessageReactionRemoveEvent event) {
+		// Don't react outside of the groups channel
+		if (!event.getChannel().getName().equals(GROUP_CHANNEL_NAME)) {
+			return;
+		}
+
+		// Don't react to reactions from the bot itself
+		if (event.getUser().equals(jda.getSelfUser())) {
+			return;
+		}
+
+		final String reaction = event.getReactionEmote().getName();
+		if (reaction.equals(REACTION_JOIN_GROUP)) {
+			leaveGroup(event);
+		}
+	}
+
+	private void leaveGroup(GuildMessageReactionRemoveEvent event) {
+		final Guild guild = event.getGuild();
+		final Role group = guild
+				.getRolesByName(getFirstWord(
+						event.getChannel().getMessageById(event.getMessageId()).complete().getContentStripped()), true)
+				.get(0);
+		guild.getController().removeRolesFromMember(event.getMember(), group).complete();
+		final Message message = event.getChannel().getMessageById(event.getMessageIdLong()).complete();
+		if (message.getReactions().isEmpty()) {
+			message.delete().queue();
+		}
+	}
+
+	@Override
 	public void onGuildMessageReceived(final GuildMessageReceivedEvent event) {
 		if (event.getChannel().getName().equals(GROUP_CHANNEL_NAME)) {
 			newGroup(event.getMessage());
@@ -178,16 +213,18 @@ public class GroupBot extends ListenerAdapter {
 				event.getChannel().getMessageById(event.getMessageId()).complete().getContentStripped());
 		final Guild guild = event.getGuild();
 		guild.getController().addRolesToMember(event.getMember(), guild.getRolesByName(group, true).get(0)).queue();
+		final Message message = event.getChannel().getMessageById(event.getMessageIdLong()).complete();
+		if (message.getMember().equals(event.getMember())) {
+			event.getReaction().removeReaction(jda.getSelfUser()).queue();
+		}
 	}
 
-	/**
-	 * @param event
-	 */
-	private void onJoinNewServer(final GuildMemberRoleAddEvent event) {
-		if (event.getGuild().getTextChannelsByName(GROUP_CHANNEL_NAME, true).size() > 0) {
+	private static void onJoinNewServer(Guild guild) {
+		if (guild.getTextChannelsByName(GROUP_CHANNEL_NAME, true).size() > 0) {
 			return;
 		}
 
-		event.getGuild().getController().createTextChannel(GROUP_CHANNEL_NAME).queue();
+		guild.getController().createTextChannel(GROUP_CHANNEL_NAME).complete().getManager()
+				.setTopic(GROUP_CHANNEL_TOPIC).queue();
 	}
 }
